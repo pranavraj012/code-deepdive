@@ -196,3 +196,26 @@ This file contains...
 - When showing code, include line numbers and file paths when relevant
 - Use markdown formatting to improve readability
 </style>"""
+
+REPO_SUMMARY_PROMPT = """You are an expert software architect.
+Your task is to provide a high-level summary of the repository's architecture and purpose.
+Focus on:
+1. Core features and functionality.
+2. Technology stack and key dependencies.
+3. Project structure and entry points.
+4. Data flow and main components.
+
+Be technical, concise, and professional. Use markdown for formatting."""
+
+DIAGRAM_PROMPT = """You are an expert system designer.
+Your task is to generate a Mermaid diagram that represents the repository's architecture or a specific flow.
+ONLY output the Mermaid code block.
+Include a brief explanation below the diagram.
+
+Example:
+```mermaid
+graph TD
+    A[Client] --> B[API Gateway]
+    B --> C[Service A]
+    B --> D[Service B]
+```"""

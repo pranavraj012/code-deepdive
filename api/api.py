@@ -9,6 +9,8 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 import google.generativeai as genai
 import asyncio
+from api.github_service import GitHubService
+from api.hybrid_proxy import HybridProxy
 
 # Configure logging
 from api.logging_config import setup_logging
@@ -144,7 +146,22 @@ class ModelConfig(BaseModel):
 class AuthorizationConfig(BaseModel):
     code: str = Field(..., description="Authorization code")
 
+class RepoAnalysisRequest(BaseModel):
+    repo_url: str = Field(..., description="URL of the repository")
+    token: Optional[str] = Field(None, description="GitHub personal access token")
+    provider: Optional[str] = Field("google", description="LLM provider")
+    model: Optional[str] = Field(None, description="LLM model")
+
+class GitHubDataRequest(BaseModel):
+    repo_url: str = Field(..., description="URL of the repository")
+    token: Optional[str] = Field(None, description="GitHub personal access token")
+    per_page: Optional[int] = Field(10, description="Number of items to fetch")
+
 from api.config import configs, WIKI_AUTH_MODE, WIKI_AUTH_CODE
+
+# Initialize Services
+LOCAL_RAG_URL = os.environ.get("LOCAL_RAG_URL")
+hybrid_proxy = HybridProxy(local_url=LOCAL_RAG_URL)
 
 @app.get("/lang/config")
 async def get_lang_config():
@@ -395,10 +412,122 @@ from api.simple_chat import chat_completions_stream
 from api.websocket_wiki import handle_websocket_chat
 
 # Add the chat_completions_stream endpoint to the main app
-app.add_api_route("/chat/completions/stream", chat_completions_stream, methods=["POST"])
+@app.post("/chat/completions/stream")
+async def chat_stream_endpoint(request: Request):
+    """Bridge for the chat completions stream."""
+    if LOCAL_RAG_URL:
+        # For streaming proxy, we might need a more complex generator, 
+        # but for now let's use the same JSON proxy for consistency if it's acceptable.
+        # Actually, streaming should be proxied as a stream.
+        import httpx
+        from fastapi.responses import StreamingResponse
+        
+        async def stream_proxy():
+            body = await request.json()
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream("POST", f"{LOCAL_RAG_URL}/chat/completions/stream", json=body) as response:
+                    async for chunk in response.aiter_bytes():
+                        yield chunk
+
+        return StreamingResponse(stream_proxy(), media_type="text/event-stream")
+    
+    # Otherwise call the local implementation
+    from api.simple_chat import chat_completions_stream
+    # Convert request to model if needed, but chat_completions_stream expects ChatCompletionRequest
+    body = await request.json()
+    from api.simple_chat import ChatCompletionRequest
+    return await chat_completions_stream(ChatCompletionRequest(**body))
 
 # Add the WebSocket endpoint
-app.add_websocket_route("/ws/chat", handle_websocket_chat)
+@app.websocket("/ws/chat")
+async def websocket_endpoint(websocket: WebSocket):
+    if LOCAL_RAG_URL:
+        await websocket.accept()
+        await hybrid_proxy.proxy_websocket(websocket, "/ws/chat")
+    else:
+        from api.websocket_wiki import handle_websocket_chat
+        await handle_websocket_chat(websocket)
+
+# --- New Repo Analysis Endpoints ---
+
+@app.post("/api/repo/summary")
+async def get_repo_summary(request: RepoAnalysisRequest):
+    """Generate a high-level summary of the repository."""
+    if LOCAL_RAG_URL:
+        # Proxy to local node
+        logger.info(f"Proxying summary request for {request.repo_url} to local node")
+        return await hybrid_proxy.proxy_post("/api/repo/summary", request.model_dump())
+    
+    # Internal logic (if running locally or on server with RAG)
+    try:
+        from api.rag import RAG
+        from api.prompts import REPO_SUMMARY_PROMPT
+        
+        rag = RAG(provider=request.provider, model=request.model)
+        rag.prepare_retriever(request.repo_url, token=request.token)
+        
+        query = "Provide a high-level summary of this repository's architecture and purpose."
+        response = rag(f"{REPO_SUMMARY_PROMPT}\n\nQuery: {query}")
+        
+        # Assume RAG returns a response object with text or generated content
+        # This part might need adjustment based on exact RAG call return type
+        return {"summary": str(response)}
+    except Exception as e:
+        logger.error(f"Error generating repo summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/repo/diagram")
+async def get_repo_diagram(request: RepoAnalysisRequest):
+    """Generate a Mermaid diagram of the repository architecture."""
+    if LOCAL_RAG_URL:
+        logger.info(f"Proxying diagram request for {request.repo_url} to local node")
+        return await hybrid_proxy.proxy_post("/api/repo/diagram", request.model_dump())
+    
+    try:
+        from api.rag import RAG
+        from api.prompts import DIAGRAM_PROMPT
+        
+        rag = RAG(provider=request.provider, model=request.model)
+        rag.prepare_retriever(request.repo_url, token=request.token)
+        
+        query = "Generate a Mermaid diagram representing the repository's core architecture."
+        response = rag(f"{DIAGRAM_PROMPT}\n\nQuery: {query}")
+        
+        return {"diagram": str(response)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- GitHub REST API Endpoints ---
+
+@app.post("/api/repo/issues")
+async def get_github_issues(request: GitHubDataRequest):
+    """Fetch recent issues from GitHub."""
+    try:
+        github_service = GitHubService(token=request.token)
+        issues = github_service.get_issues(request.repo_url, per_page=request.per_page)
+        return {"issues": issues}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/repo/pulls")
+async def get_github_pulls(request: GitHubDataRequest):
+    """Fetch recent pull requests from GitHub."""
+    try:
+        github_service = GitHubService(token=request.token)
+        pulls = github_service.get_pull_requests(request.repo_url, per_page=request.per_page)
+        return {"pull_requests": pulls}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/repo/commits")
+async def get_github_commits(request: GitHubDataRequest):
+    """Fetch recent commits from GitHub."""
+    try:
+        github_service = GitHubService(token=request.token)
+        commits = github_service.get_commits(request.repo_url, per_page=request.per_page)
+        return {"commits": commits}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- Wiki Cache Helper Functions ---
 
