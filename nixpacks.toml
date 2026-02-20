@@ -1,8 +1,7 @@
-[phases.setup]
-nixPkgs = ["...", "python311"]
+providers = ["python", "node"]
 
 [phases.install]
-cmds = ["python3 -m pip install -r requirements.txt", "npm install"]
+cmds = ["python -m pip install -r requirements.txt", "npm install"]
 
 [start]
-cmd = "python3 -m api.main"
+cmd = "python -m api.main"
