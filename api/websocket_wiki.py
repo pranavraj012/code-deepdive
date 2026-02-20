@@ -1,5 +1,7 @@
 import logging
 import os
+import asyncio
+import time
 from typing import List, Optional, Dict, Any
 from urllib.parse import unquote
 
@@ -290,6 +292,7 @@ IMPORTANT:You MUST respond in {language_name} language.
 <style>
 - Be concise but thorough
 - Use markdown formatting to improve readability
+- For diagrams, ALWAYS use Mermaid syntax wrapped in triple backticks with the `mermaid` language identifier (e.g., ```mermaid ... ```).
 - Cite specific files and code sections when relevant
 </style>"""
             elif is_final_iteration:
@@ -320,6 +323,7 @@ IMPORTANT:You MUST respond in {language_name} language.
 <style>
 - Be concise but thorough
 - Use markdown formatting to improve readability
+- For diagrams, ALWAYS use Mermaid syntax wrapped in triple backticks with the `mermaid` language identifier (e.g., ```mermaid ... ```).
 - Cite specific files and code sections when relevant
 - Structure your response with clear headings
 - End with actionable insights or recommendations when appropriate
@@ -353,6 +357,7 @@ IMPORTANT:You MUST respond in {language_name} language.
 - Be concise but thorough
 - Focus on providing new information, not repeating what's already been covered
 - Use markdown formatting to improve readability
+- For diagrams, ALWAYS use Mermaid syntax wrapped in triple backticks with the `mermaid` language identifier (e.g., ```mermaid ... ```).
 - Cite specific files and code sections when relevant
 </style>"""
         else:
@@ -385,6 +390,7 @@ This file contains...
 
 - Format your response with proper markdown including headings, lists, and code blocks WITHIN your answer
 - For code analysis, organize your response with clear sections
+- For diagrams, ALWAYS use Mermaid syntax wrapped in triple backticks with the `mermaid` language identifier (e.g., ```mermaid ... ```).
 - Think step by step and structure your answer logically
 - Start with the most relevant information that directly addresses the user's query
 - Be precise and technical when discussing code
@@ -706,11 +712,31 @@ This file contains...
                     await websocket.close()
             else:
                 # Google Generative AI (default provider)
-                response = model.generate_content(prompt, stream=True)
-                for chunk in response:
-                    if hasattr(chunk, 'text'):
-                        await websocket.send_text(chunk.text)
-                await websocket.close()
+                max_retries = 3
+                retry_delay = 2
+                last_error = None
+                
+                for attempt in range(max_retries):
+                    try:
+                        logger.info(f"Making Google Generative AI API call (attempt {attempt + 1})")
+                        response = model.generate_content(prompt, stream=True)
+                        for chunk in response:
+                            if hasattr(chunk, 'text'):
+                                await websocket.send_text(chunk.text)
+                        await websocket.close()
+                        break
+                    except Exception as e:
+                        last_error = e
+                        error_msg = str(e)
+                        if "429" in error_msg or "ResourceExhausted" in error_msg or "quota" in error_msg.lower():
+                            if attempt < max_retries - 1:
+                                wait_time = retry_delay * (2 ** attempt)
+                                logger.warning(f"Rate limit hit (429), retrying in {wait_time}s... Error: {error_msg}")
+                                await asyncio.sleep(wait_time)
+                                continue
+                        
+                        # If not a 429 or we've exhausted retries, re-raise to the outer handler
+                        raise last_error
 
         except Exception as e_outer:
             logger.error(f"Error in streaming response: {str(e_outer)}")

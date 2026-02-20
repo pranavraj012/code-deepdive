@@ -163,11 +163,19 @@ def load_embedder_config():
 def get_embedder_config():
     """
     Get the current embedder configuration based on DEEPWIKI_EMBEDDER_TYPE.
+    Automatically falls back to Google embedder if OpenAI API key is missing.
 
     Returns:
         dict: The embedder configuration with model_client resolved
     """
     embedder_type = EMBEDDER_TYPE
+    
+    # If using OpenAI (default) but API key is missing, check for Google fallback
+    if embedder_type == 'openai' and not OPENAI_API_KEY:
+        if GOOGLE_API_KEY and 'embedder_google' in configs:
+            logger.info("OPENAI_API_KEY missing, falling back to Google embedder")
+            return configs.get("embedder_google", {})
+    
     if embedder_type == 'bedrock' and 'embedder_bedrock' in configs:
         return configs.get("embedder_bedrock", {})
     elif embedder_type == 'google' and 'embedder_google' in configs:
@@ -259,16 +267,7 @@ def load_repo_config():
 def load_lang_config():
     default_config = {
         "supported_languages": {
-            "en": "English",
-            "ja": "Japanese (日本語)",
-            "zh": "Mandarin Chinese (中文)",
-            "zh-tw": "Traditional Chinese (繁體中文)",
-            "es": "Spanish (Español)",
-            "kr": "Korean (한국어)",
-            "vi": "Vietnamese (Tiếng Việt)",
-            "pt-br": "Brazilian Portuguese (Português Brasileiro)",
-            "fr": "Français (French)",
-            "ru": "Русский (Russian)"
+            "en": "English"
         },
         "default": "en"
     }

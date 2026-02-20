@@ -200,13 +200,18 @@ class GoogleEmbedderClient(ModelClient):
         # Set default model if not provided
         if "model" not in final_model_kwargs:
             final_model_kwargs["model"] = "text-embedding-004"
+
+        # Explicitly support output_dimensionality if provided
+        if "output_dimensionality" in final_model_kwargs:
+            # Nothing special needed, genai.embed_content should accept it as kwarg
+            pass
             
         return final_model_kwargs
 
     @backoff.on_exception(
         backoff.expo,
         (Exception,),  # Google AI may raise various exceptions
-        max_time=5,
+        max_time=300,
     )
     def call(self, api_kwargs: Dict = {}, model_type: ModelType = ModelType.UNDEFINED):
         """Call Google AI embedding API.
@@ -239,8 +244,10 @@ class GoogleEmbedderClient(ModelClient):
                 response = genai.embed_content(**api_kwargs)
             elif "contents" in api_kwargs:
                 # Batch embedding - Google AI supports batch natively
-                contents = api_kwargs.pop("contents")
-                response = genai.embed_content(content=contents, **api_kwargs)
+                # Copy to avoid modifying original dict for retries
+                temp_kwargs = api_kwargs.copy()
+                contents = temp_kwargs.pop("contents")
+                response = genai.embed_content(content=contents, **temp_kwargs)
             else:
                 raise ValueError("Either 'content' or 'contents' must be provided")
                 

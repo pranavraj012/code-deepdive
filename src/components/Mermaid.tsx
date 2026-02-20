@@ -235,7 +235,7 @@ const FullScreenModal: React.FC<{
       >
         {/* Modal header with controls */}
         <div className="flex items-center justify-between p-4 border-b border-[var(--border-color)]">
-          <div className="font-medium text-[var(--foreground)] font-serif">図表表示</div>
+          <div className="font-medium text-[var(--foreground)] font-serif">Diagram Explorer</div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <button
@@ -358,6 +358,70 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, className = '', zoomingEnabled
 
     let isMounted = true;
 
+    const preprocessMermaid = (code: string) => {
+      let processed = code.trim();
+
+      // 1. Remove any leading/trailing markdown code block markers that might have leaked
+      processed = processed.replace(/^```mermaid\s*/i, '').replace(/\s*```$/, '');
+
+      // 2. Fix flowchart labels with special characters (like parentheses, spaces, quotes)
+      // This handles [box], (round), {decision}, etc.
+      const shapes = [
+        { open: '[', close: ']', targetOpen: '["', targetClose: '"]' },
+        { open: '(', close: ')', targetOpen: '("', targetClose: '")' },
+        { open: '{', close: '}', targetOpen: '{"', targetClose: '"}' },
+        { open: '>', close: ']', targetOpen: '>"', targetClose: '"]' },
+      ];
+
+      for (const shape of shapes) {
+        const escapedOpen = shape.open === '(' || shape.open === '[' || shape.open === '{' ? '\\' + shape.open : shape.open;
+        const escapedClose = shape.close === ')' || shape.close === ']' || shape.close === '}' ? '\\' + shape.close : shape.close;
+
+        // We look for NodeShape(Content) where Content doesn't start with a quote
+        const regex = new RegExp(`(\\w+)${escapedOpen}([^${escapedClose}\\n]+)${escapedClose}`, 'g');
+
+        processed = processed.replace(regex, (match, id, label) => {
+          const trimmedLabel = label.trim();
+
+          // If already quoted, leave it
+          if (trimmedLabel.startsWith('"') && trimmedLabel.endsWith('"')) {
+            return match;
+          }
+
+          // If contains problematic characters, wrap in quotes and escape internal quotes
+          if (trimmedLabel.includes(' ') || trimmedLabel.includes('(') || trimmedLabel.includes(')') ||
+            trimmedLabel.includes('/') || trimmedLabel.includes(':') || trimmedLabel.includes('"') ||
+            trimmedLabel.includes('[') || trimmedLabel.includes(']')) {
+            const escapedLabel = trimmedLabel.replace(/"/g, '\\"');
+            return `${id}${shape.targetOpen}${escapedLabel}${shape.targetClose}`;
+          }
+
+          return match;
+        });
+      }
+
+      // 3. Fix sequence diagram participant definitions with parentheses
+      if (processed.includes('sequenceDiagram')) {
+        processed = processed.replace(/participant\s+(\w+)\s+as\s+([^"\n]+)/g, (match, alias, name) => {
+          if ((name.includes('(') || name.includes(')') || name.includes(' ')) &&
+            !name.trim().startsWith('"') && !name.trim().endsWith('"')) {
+            return `participant ${alias} as "${name.trim()}"`;
+          }
+          return match;
+        });
+      }
+
+      // 4. Ensure there's a newline after the diagram type directive if missing
+      const directives = ['flowchart', 'graph', 'sequenceDiagram', 'classDiagram', 'stateDiagram', 'erDiagram', 'gantt', 'gitGraph', 'pie', 'journey'];
+      for (const dir of directives) {
+        if (processed.startsWith(dir) && !processed.substring(dir.length).startsWith('\n') && !processed.substring(dir.length).startsWith(' ')) {
+          processed = processed.replace(dir, dir + '\n');
+        }
+      }
+
+      return processed;
+    };
+
     const renderChart = async () => {
       if (!isMounted) return;
 
@@ -365,8 +429,10 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, className = '', zoomingEnabled
         setError(null);
         setSvg('');
 
-        // Render the chart directly without preprocessing
-        const { svg: renderedSvg } = await mermaid.render(idRef.current, chart);
+        const preprocessedChart = preprocessMermaid(chart);
+
+        // Render the chart with preprocessed content
+        const { svg: renderedSvg } = await mermaid.render(idRef.current, preprocessedChart);
 
         if (!isMounted) return;
 
@@ -392,7 +458,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, className = '', zoomingEnabled
           if (mermaidRef.current) {
             mermaidRef.current.innerHTML = `
               <div class="text-red-500 dark:text-red-400 text-xs mb-1">Syntax error in diagram</div>
-              <pre class="text-xs overflow-auto p-2 bg-gray-100 dark:bg-gray-800 rounded">${chart}</pre>
+              <pre class="text-xs overflow-auto p-2 bg-gray-100 dark:bg-gray-800 rounded font-mono">${chart}</pre>
             `;
           }
         }
@@ -420,12 +486,12 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, className = '', zoomingEnabled
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            図表レンダリングエラー
+            Diagram Rendering Error
           </div>
         </div>
         <div ref={mermaidRef} className="text-xs overflow-auto"></div>
         <div className="mt-3 text-xs text-[var(--muted)] font-serif">
-          図表に構文エラーがあり、レンダリングできません。
+          The diagram has a syntax error and cannot be rendered.
         </div>
       </div>
     );
@@ -438,7 +504,7 @@ const Mermaid: React.FC<MermaidProps> = ({ chart, className = '', zoomingEnabled
           <div className="w-2 h-2 bg-[var(--accent-primary)]/70 rounded-full animate-pulse"></div>
           <div className="w-2 h-2 bg-[var(--accent-primary)]/70 rounded-full animate-pulse delay-75"></div>
           <div className="w-2 h-2 bg-[var(--accent-primary)]/70 rounded-full animate-pulse delay-150"></div>
-          <span className="text-[var(--muted)] text-xs ml-2 font-serif">図表を描画中...</span>
+          <span className="text-[var(--muted)] text-xs ml-2 font-serif">Rendering diagram...</span>
         </div>
       </div>
     );

@@ -13,6 +13,12 @@ LANGUAGE DETECTION AND RESPONSE:
 FORMAT YOUR RESPONSE USING MARKDOWN:
 - Use proper markdown syntax for all formatting
 - For code blocks, use triple backticks with language specification (```python, ```javascript, etc.)
+- For diagrams, ALWAYS use Mermaid syntax wrapped in triple backticks with the `mermaid` language identifier.
+  Example:
+  ```mermaid
+  sequenceDiagram
+    Alice->>Bob: Hello
+  ```
 - Use ## headings for major sections
 - Use bullet points or numbered lists where appropriate
 - Format tables using markdown table syntax when presenting structured data
@@ -177,6 +183,7 @@ This file contains...
 
 - Format your response with proper markdown including headings, lists, and code blocks WITHIN your answer
 - For code analysis, organize your response with clear sections
+- For diagrams, ALWAYS use Mermaid syntax wrapped in triple backticks with the `mermaid` language identifier (e.g., ```mermaid ... ```).
 - Think step by step and structure your answer logically
 - Start with the most relevant information that directly addresses the user's query
 - Be precise and technical when discussing code

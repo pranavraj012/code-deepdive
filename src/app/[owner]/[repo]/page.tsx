@@ -245,7 +245,7 @@ export default function RepoWikiPage() {
   const [selectedModelState, setSelectedModelState] = useState(modelParam);
   const [isCustomSelectedModelState, setIsCustomSelectedModelState] = useState(isCustomModelParam);
   const [customSelectedModelState, setCustomSelectedModelState] = useState(customModelParam);
-  const [showModelOptions, setShowModelOptions] = useState(false); // Controls whether to show model options
+  const [isModelSelectionModalOpen, setIsModelSelectionModalOpen] = useState(false); // Controls whether to show model options
   const excludedDirs = searchParams.get('excluded_dirs') || '';
   const excludedFiles = searchParams.get('excluded_files') || '';
   const [modelExcludedDirs, setModelExcludedDirs] = useState(excludedDirs);
@@ -298,7 +298,7 @@ export default function RepoWikiPage() {
     try {
       const url = new URL(repoUrl);
       const hostname = url.hostname;
-      
+
       if (hostname === 'github.com' || hostname.includes('github')) {
         // GitHub URL format: https://github.com/owner/repo/blob/branch/path
         return `${repoUrl}/blob/${defaultBranch}/${filePath}`;
@@ -416,8 +416,8 @@ export default function RepoWikiPage() {
         const repoUrl = getRepoUrl(effectiveRepoInfo);
 
         // Create the prompt content - simplified to avoid message dialogs
- const promptContent =
-`You are an expert technical writer and software architect.
+        const promptContent =
+          `You are an expert technical writer and software architect.
 Your task is to generate a comprehensive and accurate technical wiki page in Markdown format about a specific feature, system, or module within a given software project.
 
 You will be given:
@@ -449,39 +449,48 @@ Based ONLY on the content of the \`[RELEVANT_SOURCE_FILES]\`:
 
 3.  **Mermaid Diagrams:**
     *   EXTENSIVELY use Mermaid diagrams (e.g., \`flowchart TD\`, \`sequenceDiagram\`, \`classDiagram\`, \`erDiagram\`, \`graph TD\`) to visually represent architectures, flows, relationships, and schemas found in the source files.
+    *   CRITICAL: All Mermaid diagrams MUST be wrapped in a markdown code block with the \`mermaid\` language identifier.
+    *   Example:
+        \`\`\`mermaid
+        graph TD
+          A --> B
+        \`\`\`
     *   Ensure diagrams are accurate and directly derived from information in the \`[RELEVANT_SOURCE_FILES]\`.
     *   Provide a brief explanation before or after each diagram to give context.
     *   CRITICAL: All diagrams MUST follow strict vertical orientation:
-       - Use "graph TD" (top-down) directive for flow diagrams
-       - NEVER use "graph LR" (left-right)
-       - Maximum node width should be 3-4 words
-       - For sequence diagrams:
-         - Start with "sequenceDiagram" directive on its own line
-         - Define ALL participants at the beginning using "participant" keyword
-         - Optionally specify participant types: actor, boundary, control, entity, database, collections, queue
-         - Use descriptive but concise participant names, or use aliases: "participant A as Alice"
-         - Use the correct Mermaid arrow syntax (8 types available):
-           - -> solid line without arrow (rarely used)
-           - --> dotted line without arrow (rarely used)
-           - ->> solid line with arrowhead (most common for requests/calls)
-           - -->> dotted line with arrowhead (most common for responses/returns)
-           - ->x solid line with X at end (failed/error message)
-           - -->x dotted line with X at end (failed/error response)
-           - -) solid line with open arrow (async message, fire-and-forget)
-           - --) dotted line with open arrow (async response)
-           - Examples: A->>B: Request, B-->>A: Response, A->xB: Error, A-)B: Async event
-         - Use +/- suffix for activation boxes: A->>+B: Start (activates B), B-->>-A: End (deactivates B)
-         - Group related participants using "box": box GroupName ... end
-         - Use structural elements for complex flows:
-           - loop LoopText ... end (for iterations)
-           - alt ConditionText ... else ... end (for conditionals)
-           - opt OptionalText ... end (for optional flows)
-           - par ParallelText ... and ... end (for parallel actions)
-           - critical CriticalText ... option ... end (for critical regions)
-           - break BreakText ... end (for breaking flows/exceptions)
-         - Add notes for clarification: "Note over A,B: Description", "Note right of A: Detail"
-         - Use autonumber directive to add sequence numbers to messages
-         - NEVER use flowchart-style labels like A--|label|-->B. Always use a colon for labels: A->>B: My Label
+        - Use "graph TD" (top-down) directive for flow diagrams
+        - NEVER use "graph LR" (left-right)
+        - Maximum node width should be 3-4 words
+        - IMPORTANT: All node labels MUST be wrapped in double quotes if they contain special characters like parentheses, spaces, punctuation, or non-alphanumeric characters. Example: \`Node["My Label (Info)"]\`
+        - For sequence diagrams:
+          - Start with "sequenceDiagram" directive on its own line
+          - Define ALL participants at the beginning using "participant" keyword
+          - Use double quotes for participant names with special characters: \`participant O as "Ollama (Local)"\`
+          - Optionally specify participant types: actor, boundary, control, entity, database, collections, queue
+          - Use descriptive but concise participant names, or use aliases: \`participant A as "Alice"\`
+          - Use the correct Mermaid arrow syntax (8 types available):
+            - -> solid line without arrow (rarely used)
+            - --> dotted line without arrow (rarely used)
+            - ->> solid line with arrowhead (most common for requests/calls)
+            - -->> dotted line with arrowhead (most common for responses/returns)
+            - ->x solid line with X at end (failed/error message)
+            - -->x dotted line with X at end (failed/error response)
+            - -) solid line with open arrow (async message, fire-and-forget)
+            - --) dotted line with open arrow (async response)
+            - Examples: \`A->>B: Request\`, \`B-->>A: Response\`, \`A->xB: Error\`, \`A-)B: Async event\`
+          - Use +/- suffix for activation boxes: \`A->>+B: Start (activates B)\`, \`B-->>-A: End (deactivates B)\`
+          - Group related participants using "box": \`box "Group Name" ... end\`
+          - Use structural elements for complex flows:
+            - \`loop "Loop Text" ... end\` (for iterations)
+            - \`alt "Condition Text" ... else ... end\` (for conditionals)
+            - \`opt "Optional Text" ... end\` (for optional flows)
+            - \`par "Parallel Text" ... and ... end\` (for parallel actions)
+            - \`critical "Critical Text" ... option ... end\` (for critical regions)
+            - \`break "Break Text" ... end\` (for breaking flows/exceptions)
+          - Add notes for clarification: \`Note over A,B: "Description"\`, \`Note right of A: "Detail"\`
+          - Use \`autonumber\` directive to add sequence numbers to messages
+          - Message labels: NEVER use quotes for message labels in sequence diagrams. Always use a colon: \`A->>B: Label Text\`. For example, use \`G->>+LM: renderBackground(ctx)\` instead of \`G->>+LM: "renderBackground(ctx)"\`.
+          - Avoid flowchart-style labels like \`A--|label|-->B\`.
 
 4.  **Tables:**
     *   Use Markdown tables to summarize information such as:
@@ -508,16 +517,16 @@ Based ONLY on the content of the \`[RELEVANT_SOURCE_FILES]\`:
 9.  **Conclusion/Summary:** End with a brief summary paragraph if appropriate for "${page.title}", reiterating the key aspects covered and their significance within the project.
 
 IMPORTANT: Generate the content in ${language === 'en' ? 'English' :
-            language === 'ja' ? 'Japanese (日本語)' :
-            language === 'zh' ? 'Mandarin Chinese (中文)' :
-            language === 'zh-tw' ? 'Traditional Chinese (繁體中文)' :
-            language === 'es' ? 'Spanish (Español)' :
-            language === 'kr' ? 'Korean (한국어)' :
-            language === 'vi' ? 'Vietnamese (Tiếng Việt)' : 
-            language === "pt-br" ? "Brazilian Portuguese (Português Brasileiro)" :
-            language === "fr" ? "Français (French)" :
-            language === "ru" ? "Русский (Russian)" :
-            'English'} language.
+            language === 'ja' ? 'Japanese' :
+              language === 'zh' ? 'Mandarin Chinese' :
+                language === 'zh-tw' ? 'Traditional Chinese' :
+                  language === 'es' ? 'Spanish' :
+                    language === 'kr' ? 'Korean' :
+                      language === 'vi' ? 'Vietnamese' :
+                        language === "pt-br" ? "Brazilian Portuguese" :
+                          language === "fr" ? "French" :
+                            language === "ru" ? "Russian" :
+                              'English'} language.
 
 Remember:
 - Ground every claim in the provided source files.
@@ -545,7 +554,9 @@ Remember:
         try {
           // Create WebSocket URL from the server base URL
           const serverBaseUrl = process.env.SERVER_BASE_URL || 'http://localhost:8001';
-          const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws')? serverBaseUrl.replace(/^https/, 'wss'): serverBaseUrl.replace(/^http/, 'ws');
+          const wsBaseUrl = serverBaseUrl.startsWith('https')
+            ? serverBaseUrl.replace(/^https/, 'wss')
+            : serverBaseUrl.replace(/^http/, 'ws');
           const wsUrl = `${wsBaseUrl}/ws/chat`;
 
           // Create a new WebSocket connection
@@ -553,8 +564,15 @@ Remember:
 
           // Create a promise that resolves when the WebSocket connection is complete
           await new Promise<void>((resolve, reject) => {
+            // Set up timeout
+            const timeout = setTimeout(() => {
+              ws.close();
+              reject(new Error('WebSocket connection timeout'));
+            }, 30000);
+
             // Set up event handlers
             ws.onopen = () => {
+              clearTimeout(timeout);
               console.log(`WebSocket connection established for page: ${page.title}`);
               // Send the request as JSON
               ws.send(JSON.stringify(requestBody));
@@ -562,22 +580,9 @@ Remember:
             };
 
             ws.onerror = (error) => {
+              clearTimeout(timeout);
               console.error('WebSocket error:', error);
               reject(new Error('WebSocket connection failed'));
-            };
-
-            // If the connection doesn't open within 5 seconds, fall back to HTTP
-            const timeout = setTimeout(() => {
-              reject(new Error('WebSocket connection timeout'));
-            }, 5000);
-
-            // Clear the timeout if the connection opens successfully
-            ws.onopen = () => {
-              clearTimeout(timeout);
-              console.log(`WebSocket connection established for page: ${page.title}`);
-              // Send the request as JSON
-              ws.send(JSON.stringify(requestBody));
-              resolve();
             };
           });
 
@@ -709,7 +714,7 @@ Remember:
         type: effectiveRepoInfo.type,
         messages: [{
           role: 'user',
-content: `Analyze this GitHub repository ${owner}/${repo} and create a wiki structure for it.
+          content: `Analyze this GitHub repository ${owner}/${repo} and create a wiki structure for it.
 
 1. The complete file tree of the project:
 <file_tree>
@@ -724,16 +729,16 @@ ${readme}
 I want to create a wiki for this repository. Determine the most logical structure for a wiki based on the repository's content.
 
 IMPORTANT: The wiki content will be generated in ${language === 'en' ? 'English' :
-            language === 'ja' ? 'Japanese (日本語)' :
-            language === 'zh' ? 'Mandarin Chinese (中文)' :
-            language === 'zh-tw' ? 'Traditional Chinese (繁體中文)' :
-            language === 'es' ? 'Spanish (Español)' :
-            language === 'kr' ? 'Korean (한国語)' :
-            language === 'vi' ? 'Vietnamese (Tiếng Việt)' :
-            language === "pt-br" ? "Brazilian Portuguese (Português Brasileiro)" :
-            language === "fr" ? "Français (French)" :
-            language === "ru" ? "Русский (Russian)" :
-            'English'} language.
+              language === 'ja' ? 'Japanese' :
+                language === 'zh' ? 'Mandarin Chinese' :
+                  language === 'zh-tw' ? 'Traditional Chinese' :
+                    language === 'es' ? 'Spanish' :
+                      language === 'kr' ? 'Korean' :
+                        language === 'vi' ? 'Vietnamese' :
+                          language === "pt-br" ? "Brazilian Portuguese" :
+                            language === "fr" ? "French" :
+                              language === "ru" ? "Russian" :
+                                'English'} language.
 
 When designing the wiki structure, include pages that would benefit from visual diagrams, such as:
 - Architecture overviews
@@ -842,7 +847,7 @@ IMPORTANT:
       try {
         // Create WebSocket URL from the server base URL
         const serverBaseUrl = process.env.SERVER_BASE_URL || 'http://localhost:8001';
-        const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws')? serverBaseUrl.replace(/^https/, 'wss'): serverBaseUrl.replace(/^http/, 'ws');
+        const wsBaseUrl = serverBaseUrl.replace(/^http/, 'ws') ? serverBaseUrl.replace(/^https/, 'wss') : serverBaseUrl.replace(/^http/, 'ws');
         const wsUrl = `${wsBaseUrl}/ws/chat`;
 
         // Create a new WebSocket connection
@@ -929,23 +934,34 @@ IMPORTANT:
         }
       }
 
-      if(responseText.includes('Error preparing retriever: Environment variable OPENAI_API_KEY must be set')) {
-         setEmbeddingError(true);
-         throw new Error('OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key.');
-       }
+      if (responseText.includes('Error preparing retriever: Environment variable OPENAI_API_KEY must be set')) {
+        setEmbeddingError(true);
+        throw new Error('OPENAI_API_KEY environment variable is not set. Please configure your OpenAI API key.');
+      }
 
-       if(responseText.includes('Ollama model') && responseText.includes('not found')) {
-         setEmbeddingError(true);
-         throw new Error('The specified Ollama embedding model was not found. Please ensure the model is installed locally or select a different embedding model in the configuration.');
-       }
+      if (responseText.includes('Ollama model') && responseText.includes('not found')) {
+        setEmbeddingError(true);
+        throw new Error('The specified Ollama embedding model was not found. Please ensure the model is installed locally or select a different embedding model in the configuration.');
+      }
 
-        // Clean up markdown delimiters
+      if (responseText.includes('Error: No valid document embeddings found')) {
+        setEmbeddingError(true);
+        throw new Error('No valid document embeddings found. This may be due to API errors during document processing or inconsistent embedding sizes. Please check your API keys and configuration.');
+      }
+
+      if (responseText.includes('Error: Inconsistent embedding sizes detected')) {
+        setEmbeddingError(true);
+        throw new Error('Inconsistent embedding sizes detected. Some documents may have failed to embed properly. This often happens when changing embedding models. Try clearing the cache or checking your configuration.');
+      }
+
+      // Clean up markdown delimiters
       responseText = responseText.replace(/^```(?:xml)?\s*/i, '').replace(/```\s*$/i, '');
 
       // Extract wiki structure from response
       const xmlMatch = responseText.match(/<wiki_structure>[\s\S]*?<\/wiki_structure>/m);
       if (!xmlMatch) {
-        throw new Error('No valid XML found in response');
+        console.error('Invalid response content (XML tags missing):', responseText);
+        throw new Error(`No valid XML found in response. Raw response: ${responseText.substring(0, 500)}${responseText.length > 500 ? '...' : ''}`);
       }
 
       let xmlText = xmlMatch[0];
@@ -985,39 +1001,77 @@ IMPORTANT:
 
       if (parseError && (!pagesEls || pagesEls.length === 0)) {
         console.warn('DOM parsing failed, trying regex fallback');
+
+        // Extract title
+        const titleMatch = xmlText.match(/<title>(.*?)<\/title>/);
+        if (titleMatch && !title) title = titleMatch[1];
+
+        // Extract description
+        const descMatch = xmlText.match(/<description>(.*?)<\/description>/);
+        if (descMatch && !description) description = descMatch[1];
+
+        // Extract pages using regex
+        const pageRegex = /<page\s+id=["'](.*?)["']>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<description>(.*?)<\/description>[\s\S]*?<importance>(.*?)<\/importance>([\s\S]*?)<\/page>/g;
+        let match;
+        while ((match = pageRegex.exec(xmlText)) !== null) {
+          const id = match[1];
+          const pageTitle = match[2];
+          const pageDesc = match[3];
+          const importanceValue = match[4];
+          const rest = match[5];
+
+          const importance = importanceValue === 'high' ? 'high' : (importanceValue === 'medium' ? 'medium' : 'low');
+
+          const filePaths: string[] = [];
+          const fileMatch = rest.matchAll(/<file_path>(.*?)<\/file_path>/g);
+          for (const f of fileMatch) filePaths.push(f[1]);
+
+          const relatedPages: string[] = [];
+          const relatedMatch = rest.matchAll(/<related>(.*?)<\/related>/g);
+          for (const r of relatedMatch) relatedPages.push(r[1]);
+
+          pages.push({
+            id,
+            title: pageTitle,
+            content: '',
+            filePaths,
+            importance,
+            relatedPages
+          });
+        }
+      } else {
+        pagesEls.forEach(pageEl => {
+          const id = pageEl.getAttribute('id') || `page-${pages.length + 1}`;
+          const titleEl = pageEl.querySelector('title');
+          const importanceEl = pageEl.querySelector('importance');
+          const filePathEls = pageEl.querySelectorAll('file_path');
+          const relatedEls = pageEl.querySelectorAll('related');
+
+          const title = titleEl ? titleEl.textContent || '' : '';
+          const importance = importanceEl ?
+            (importanceEl.textContent === 'high' ? 'high' :
+              importanceEl.textContent === 'medium' ? 'medium' : 'low') : 'medium';
+
+          const filePaths: string[] = [];
+          filePathEls.forEach(el => {
+            if (el.textContent) filePaths.push(el.textContent);
+          });
+
+          const relatedPages: string[] = [];
+          relatedEls.forEach(el => {
+            if (el.textContent) relatedPages.push(el.textContent);
+          });
+
+          pages.push({
+            id,
+            title,
+            content: '', // Will be generated later
+            filePaths,
+            importance,
+            relatedPages
+          });
+        });
       }
-
-      pagesEls.forEach(pageEl => {
-        const id = pageEl.getAttribute('id') || `page-${pages.length + 1}`;
-        const titleEl = pageEl.querySelector('title');
-        const importanceEl = pageEl.querySelector('importance');
-        const filePathEls = pageEl.querySelectorAll('file_path');
-        const relatedEls = pageEl.querySelectorAll('related');
-
-        const title = titleEl ? titleEl.textContent || '' : '';
-        const importance = importanceEl ?
-          (importanceEl.textContent === 'high' ? 'high' :
-            importanceEl.textContent === 'medium' ? 'medium' : 'low') : 'medium';
-
-        const filePaths: string[] = [];
-        filePathEls.forEach(el => {
-          if (el.textContent) filePaths.push(el.textContent);
-        });
-
-        const relatedPages: string[] = [];
-        relatedEls.forEach(el => {
-          if (el.textContent) relatedPages.push(el.textContent);
-        });
-
-        pages.push({
-          id,
-          title,
-          content: '', // Will be generated later
-          filePaths,
-          importance,
-          relatedPages
-        });
-      });
 
       // Extract sections if they exist in the XML
       const sections: WikiSection[] = [];
@@ -1094,7 +1148,7 @@ IMPORTANT:
         console.log(`Starting generation for ${pages.length} pages with controlled concurrency`);
 
         // Maximum concurrent requests
-        const MAX_CONCURRENT = 1;
+        const MAX_CONCURRENT = 5;
 
         // Create a queue of pages
         const queue = [...pages];
@@ -1218,16 +1272,16 @@ IMPORTANT:
           if (!repoUrl) {
             return 'https://api.github.com'; // Default to public GitHub
           }
-          
+
           try {
             const url = new URL(repoUrl);
             const hostname = url.hostname;
-            
+
             // If it's the public GitHub, use the standard API URL
             if (hostname === 'github.com') {
               return 'https://api.github.com';
             }
-            
+
             // For GitHub Enterprise, use the enterprise API URL format
             // GitHub Enterprise API URL format: https://github.company.com/api/v3
             return `${url.protocol}//${hostname}/api/v3`;
@@ -1243,7 +1297,7 @@ IMPORTANT:
           const repoInfoResponse = await fetch(`${githubApiBaseUrl}/repos/${owner}/${repo}`, {
             headers: createGithubHeaders(currentToken)
           });
-          
+
           if (repoInfoResponse.ok) {
             const repoData = await repoInfoResponse.json();
             defaultBranchLocal = repoData.default_branch;
@@ -1256,7 +1310,7 @@ IMPORTANT:
         }
 
         // Create list of branches to try, prioritizing the actual default branch
-        const branchesToTry = defaultBranchLocal 
+        const branchesToTry = defaultBranchLocal
           ? [defaultBranchLocal, 'main', 'master'].filter((branch, index, arr) => arr.indexOf(branch) === index)
           : ['main', 'master'];
 
@@ -1353,13 +1407,13 @@ IMPORTANT:
           // Step 2: Paginate to fetch full file tree
           let page = 1;
           let morePages = true;
-          
+
           while (morePages) {
             const apiUrl = `${projectInfoUrl}/repository/tree?recursive=true&per_page=100&page=${page}`;
             const response = await fetch(apiUrl, { headers });
 
             if (!response.ok) {
-                const errorData = await response.text();
+              const errorData = await response.text();
               throw new Error(`Error fetching GitLab repository structure (page ${page}): ${errorData}`);
             }
 
@@ -1369,31 +1423,31 @@ IMPORTANT:
             const nextPage = response.headers.get('x-next-page');
             morePages = !!nextPage;
             page = nextPage ? parseInt(nextPage, 10) : page + 1;
-        }
+          }
 
           if (!Array.isArray(filesData) || filesData.length === 0) {
             throw new Error('Could not fetch repository structure. Repository might be empty or inaccessible.');
-        }
+          }
 
           // Step 3: Format file paths
-        fileTreeData = filesData
-          .filter((item: { type: string; path: string }) => item.type === 'blob')
-          .map((item: { type: string; path: string }) => item.path)
-          .join('\n');
+          fileTreeData = filesData
+            .filter((item: { type: string; path: string }) => item.type === 'blob')
+            .map((item: { type: string; path: string }) => item.path)
+            .join('\n');
 
           // Step 4: Try to fetch README.md content
           const readmeUrl = `${projectInfoUrl}/repository/files/README.md/raw`;
-            try {
+          try {
             const readmeResponse = await fetch(readmeUrl, { headers });
-              if (readmeResponse.ok) {
-                readmeContent = await readmeResponse.text();
-                console.log('Successfully fetched GitLab README.md');
-              } else {
+            if (readmeResponse.ok) {
+              readmeContent = await readmeResponse.text();
+              console.log('Successfully fetched GitLab README.md');
+            } else {
               console.warn(`Could not fetch GitLab README.md status: ${readmeResponse.status}`);
-              }
-            } catch (err) {
-            console.warn(`Error fetching GitLab README.md:`, err);
             }
+          } catch (err) {
+            console.warn(`Error fetching GitLab README.md:`, err);
+          }
         } catch (err) {
           console.error("Error during GitLab repository tree retrieval:", err);
           throw err;
@@ -1573,7 +1627,7 @@ IMPORTANT:
   // No longer needed as we use the modal directly
 
   const confirmRefresh = useCallback(async (newToken?: string) => {
-    setShowModelOptions(false);
+    setIsModelSelectionModalOpen(false);
     setLoadingMessage(messages.loading?.clearingCache || 'Clearing server cache...');
     setIsLoading(true); // Show loading indicator immediately
 
@@ -1599,7 +1653,7 @@ IMPORTANT:
         params.append('excluded_files', modelExcludedFiles);
       }
 
-      if(authRequired && !authCode) {
+      if (authRequired && !authCode) {
         setIsLoading(false);
         console.error("Authorization code is required");
         setError('Authorization code is required');
@@ -1622,7 +1676,7 @@ IMPORTANT:
         console.warn(`Failed to clear server-side wiki cache (status: ${response.status}): ${errorText}. Proceeding with refresh anyway.`);
         // Optionally, inform the user about the cache clear failure but that refresh will still attempt
         // setError(\`Cache clear failed: ${errorText}. Trying to refresh...\`);
-        if(response.status == 401) {
+        if (response.status == 401) {
           setIsLoading(false);
           setLoadingMessage(undefined);
           setError('Failed to validate the authorization code');
@@ -1708,15 +1762,15 @@ IMPORTANT:
             const cachedData = await response.json(); // Returns null if no cache
             if (cachedData && cachedData.wiki_structure && cachedData.generated_pages && Object.keys(cachedData.generated_pages).length > 0) {
               console.log('Using server-cached wiki data');
-              if(cachedData.model) {
+              if (cachedData.model) {
                 setSelectedModelState(cachedData.model);
               }
-              if(cachedData.provider) {
+              if (cachedData.provider) {
                 setSelectedProviderState(cachedData.provider);
               }
 
               // Update repoInfo
-              if(cachedData.repo) {
+              if (cachedData.repo) {
                 setEffectiveRepoInfo(cachedData.repo);
               } else if (cachedData.repo_url && !effectiveRepoInfo.repoUrl) {
                 const updatedRepoInfo = { ...effectiveRepoInfo, repoUrl: cachedData.repo_url };
@@ -1785,7 +1839,7 @@ IMPORTANT:
                 for (const [categoryId, categoryPages] of pageClusters.entries()) {
                   if (categoryPages.length > 0) {
                     const category = categories.find(c => c.id === categoryId) ||
-                                    { id: categoryId, title: categoryId === 'other' ? 'Other' : categoryId.charAt(0).toUpperCase() + categoryId.slice(1) };
+                      { id: categoryId, title: categoryId === 'other' ? 'Other' : categoryId.charAt(0).toUpperCase() + categoryId.slice(1) };
 
                     const sectionId = `section-${categoryId}`;
                     sections.push({
@@ -1844,7 +1898,7 @@ IMPORTANT:
               setGeneratedPages(cachedData.generated_pages);
               setCurrentPageId(cachedStructure.pages.length > 0 ? cachedStructure.pages[0].id : undefined);
               setIsLoading(false);
-              setEmbeddingError(false); 
+              setEmbeddingError(false);
               setLoadingMessage(undefined);
               cacheLoadedSuccessfully.current = true;
               return; // Exit if cache is successfully loaded
@@ -1879,11 +1933,11 @@ IMPORTANT:
   useEffect(() => {
     const saveCache = async () => {
       if (!isLoading &&
-          !error &&
-          wikiStructure &&
-          Object.keys(generatedPages).length > 0 &&
-          Object.keys(generatedPages).length >= wikiStructure.pages.length &&
-          !cacheLoadedSuccessfully.current) {
+        !error &&
+        wikiStructure &&
+        Object.keys(generatedPages).length > 0 &&
+        Object.keys(generatedPages).length >= wikiStructure.pages.length &&
+        !cacheLoadedSuccessfully.current) {
 
         const allPagesHaveContent = wikiStructure.pages.every(page =>
           generatedPages[page.id] && generatedPages[page.id].content && generatedPages[page.id].content !== 'Loading...');
@@ -1936,7 +1990,7 @@ IMPORTANT:
     }
   };
 
-  const [isModelSelectionModalOpen, setIsModelSelectionModalOpen] = useState(false);
+
 
   return (
     <div className="h-screen paper-texture p-4 md:p-8 flex flex-col">
@@ -1983,10 +2037,10 @@ IMPORTANT:
                   {language === 'ja'
                     ? `${wikiStructure.pages.length}ページ中${wikiStructure.pages.length - pagesInProgress.size}ページ完了`
                     : messages.repoPage?.pagesCompleted
-                        ? messages.repoPage.pagesCompleted
-                            .replace('{completed}', (wikiStructure.pages.length - pagesInProgress.size).toString())
-                            .replace('{total}', wikiStructure.pages.length.toString())
-                        : `${wikiStructure.pages.length - pagesInProgress.size} of ${wikiStructure.pages.length} pages completed`}
+                      ? messages.repoPage.pagesCompleted
+                        .replace('{completed}', (wikiStructure.pages.length - pagesInProgress.size).toString())
+                        .replace('{total}', wikiStructure.pages.length.toString())
+                      : `${wikiStructure.pages.length - pagesInProgress.size} of ${wikiStructure.pages.length} pages completed`}
                 </p>
 
                 {/* Show list of in-progress pages */}
@@ -2005,8 +2059,8 @@ IMPORTANT:
                           {language === 'ja'
                             ? `...他に${pagesInProgress.size - 3}ページ`
                             : messages.repoPage?.andMorePages
-                                ? messages.repoPage.andMorePages.replace('{count}', (pagesInProgress.size - 3).toString())
-                                : `...and ${pagesInProgress.size - 3} more`}
+                              ? messages.repoPage.andMorePages.replace('{count}', (pagesInProgress.size - 3).toString())
+                              : `...and ${pagesInProgress.size - 3} more`}
                         </li>
                       )}
                     </ul>
@@ -2080,9 +2134,7 @@ IMPORTANT:
                 <span className={`px-2 py-0.5 rounded-full ${isComprehensiveView
                   ? 'bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] border border-[var(--accent-primary)]/30'
                   : 'bg-[var(--background)] text-[var(--foreground)] border border-[var(--border-color)]'}`}>
-                  {isComprehensiveView
-                    ? (messages.form?.comprehensive || 'Comprehensive')
-                    : (messages.form?.concise || 'Concise')}
+                  {isComprehensiveView ? "Comprehensive" : "Simple"}
                 </span>
               </div>
 
